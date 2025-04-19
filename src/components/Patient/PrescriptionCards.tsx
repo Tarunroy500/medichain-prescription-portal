@@ -15,7 +15,8 @@ import {
   Bell, 
   BellOff,
   ChevronDown, 
-  ChevronUp 
+  ChevronUp,
+  Lock 
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
