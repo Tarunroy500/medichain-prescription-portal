@@ -211,23 +211,24 @@ const PrescriptionForm = () => {
                 <p className="text-sm font-mono break-all">{blockchainTxHash}</p>
               </div>
             ) : (
-              <Alert variant="warning" className="bg-amber-50 border-amber-200 text-amber-800">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  This prescription was not recorded on the blockchain.
-                  {!isWalletConnected && (
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={connectWallet}
-                      className="ml-2 bg-amber-100"
-                    >
-                      <Wallet className="h-3 w-3 mr-1" />
-                      Connect Wallet
-                    </Button>
-                  )}
-                </AlertDescription>
-              </Alert>
+              // <Alert variant="warning" className="bg-amber-50 border-amber-200 text-amber-800">
+              //   <AlertCircle className="h-4 w-4" />
+              //   <AlertDescription>
+              //     This prescription was not recorded on the blockchain.
+              //     {!isWalletConnected && (
+              //       <Button 
+              //         variant="outline" 
+              //         size="sm" 
+              //         onClick={connectWallet}
+              //         className="ml-2 bg-amber-100"
+              //       >
+              //         <Wallet className="h-3 w-3 mr-1" />
+              //         Connect Wallet
+              //       </Button>
+              //     )}
+              //   </AlertDescription>
+              // </Alert>
+              <></>
             )}
             
             <div className="mt-6 flex justify-center">
