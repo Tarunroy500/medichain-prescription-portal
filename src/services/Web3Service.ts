@@ -2,7 +2,6 @@ import React from 'react';
 import { ethers } from 'ethers';
 import contractAbi from '../abi/contract-abi.json';
 import { toast } from 'sonner';
-import axios from 'axios';
 
 declare global {
   interface Window {
@@ -10,10 +9,7 @@ declare global {
   }
 }
 
-// Update to the correct contract address
-const CONTRACT_ADDRESS = '0x391cfacc26c685065ad81f806a74deee26e2da99';
-// Backend API URL
-const BACKEND_API_URL = 'http://localhost:8000/api';
+const CONTRACT_ADDRESS = '0x30d1444a32a7fd98a8af1de9da49142ce508f4aa';
 
 interface Web3State {
   provider: ethers.BrowserProvider | null;
@@ -44,9 +40,6 @@ const listeners: Array<(state: Web3State) => void> = [];
 const notifyListeners = () => {
   listeners.forEach(listener => listener(web3State));
 };
-
-// Map to store UI tokens to blockchain tokens
-const tokenMap = new Map<string, string>();
 
 export const Web3Service = {
   // Subscribe to state changes
@@ -170,16 +163,6 @@ export const Web3Service = {
     return ethers.hexlify(ethers.randomBytes(32));
   },
 
-  // Store mapping between UI token and blockchain token
-  storeTokenMapping: (uiToken: string, blockchainToken: string): void => {
-    tokenMap.set(uiToken, blockchainToken);
-  },
-
-  // Get blockchain token from UI token
-  getBlockchainToken: (uiToken: string): string | undefined => {
-    return tokenMap.get(uiToken);
-  },
-
   // Call smart contract to create prescription
   createPrescription: async (
     token: string,
@@ -191,14 +174,22 @@ export const Web3Service = {
   ): Promise<string | null> => {
     try {
       if (!web3State.contract || !web3State.isConnected) {
-        // Try using backend API if direct blockchain connection fails
-        return await Web3Service.createPrescriptionViaBackend(
-          token, patientAddress, disease, drug, quantity, intervalSec
-        );
+        toast.error('Wallet not connected');
+        return null;
       }
 
-      // Call the smart contract function
-      const tx = await web3State.contract.create_prescription(
+      // Log the parameters for debugging
+      console.log('Creating prescription with params:', {
+        token,
+        patientAddress,
+        disease,
+        drug,
+        quantity,
+        intervalSec
+      });
+
+      // Estimate gas for the transaction to ensure it has enough gas
+      const gasEstimate = await web3State.contract.create_prescription.estimateGas(
         token,
         patientAddress,
         disease,
@@ -207,8 +198,30 @@ export const Web3Service = {
         ethers.toBigInt(intervalSec)
       );
 
+      console.log('Gas estimate:', gasEstimate.toString());
+
+      // Call the smart contract function with gas limit
+      const tx = await web3State.contract.create_prescription(
+        token,
+        patientAddress,
+        disease,
+        drug,
+        ethers.toBigInt(quantity),
+        ethers.toBigInt(intervalSec),
+        {
+          gasLimit: gasEstimate * ethers.toBigInt(120) / ethers.toBigInt(100), // Add 20% buffer to gas estimate
+        }
+      );
+
+      console.log('Transaction sent:', tx.hash);
+      toast.info('Prescription transaction submitted', {
+        description: 'Waiting for confirmation...',
+      });
+
       // Wait for transaction to be mined
       const receipt = await tx.wait();
+      console.log('Transaction receipt:', receipt);
+      
       toast.success('Prescription created on blockchain', {
         description: `Transaction: ${receipt.hash.slice(0, 6)}...${receipt.hash.slice(-4)}`,
       });
@@ -217,52 +230,25 @@ export const Web3Service = {
     } catch (error) {
       console.error('Error creating prescription on blockchain:', error);
       
-      // Try using backend as fallback if direct method fails
-      try {
-        return await Web3Service.createPrescriptionViaBackend(
-          token, patientAddress, disease, drug, quantity, intervalSec
-        );
-      } catch (backendError) {
-        console.error('Backend fallback also failed:', backendError);
-        toast.error('Failed to create prescription on blockchain', {
-          description: error instanceof Error ? error.message : 'Unknown error',
-        });
-        return null;
-      }
-    }
-  },
-
-  // Create prescription via backend API
-  createPrescriptionViaBackend: async (
-    token: string,
-    patientAddress: string,
-    disease: string,
-    drug: string,
-    quantity: number,
-    intervalSec: number
-  ): Promise<string | null> => {
-    try {
-      const response = await axios.post(`${BACKEND_API_URL}/prescriptions`, {
-        token,
-        patient: patientAddress,
-        disease,
-        drug,
-        quantity,
-        interval: intervalSec
-      });
-      
-      if (response.data && response.data.status === 'ok') {
-        toast.success('Prescription created via backend API', {
-          description: `Transaction: ${response.data.tx.slice(0, 6)}...${response.data.tx.slice(-4)}`
-        });
-        return response.data.tx;
+      // More detailed error information
+      let errorMessage = 'Unknown error';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        console.error('Error details:', error);
+        
+        // Check for specific error types
+        if (errorMessage.includes('user rejected')) {
+          toast.error('Transaction rejected by user');
+          return null;
+        }
+        if (errorMessage.includes('insufficient funds')) {
+          toast.error('Insufficient funds for transaction');
+          return null;
+        }
       }
       
-      throw new Error('Backend API returned an error');
-    } catch (error) {
-      console.error('Error using backend API:', error);
-      toast.error('Failed to create prescription via backend', {
-        description: error instanceof Error ? error.message : 'Unknown error'
+      toast.error('Failed to create prescription on blockchain', {
+        description: errorMessage
       });
       return null;
     }
@@ -272,8 +258,8 @@ export const Web3Service = {
   dispensePrescription: async (token: string): Promise<boolean> => {
     try {
       if (!web3State.contract || !web3State.isConnected) {
-        // Try using backend API if direct blockchain connection fails
-        return await Web3Service.dispensePrescriptionViaBackend(token);
+        toast.error('Wallet not connected');
+        return false;
       }
 
       // Call the smart contract function
@@ -294,36 +280,8 @@ export const Web3Service = {
       return success;
     } catch (error) {
       console.error('Error dispensing prescription on blockchain:', error);
-      
-      // Try using backend as fallback
-      try {
-        return await Web3Service.dispensePrescriptionViaBackend(token);
-      } catch (backendError) {
-        console.error('Backend fallback also failed:', backendError);
-        toast.error('Failed to dispense prescription', {
-          description: error instanceof Error ? error.message : 'Unknown error',
-        });
-        return false;
-      }
-    }
-  },
-
-  // Dispense prescription via backend API
-  dispensePrescriptionViaBackend: async (token: string): Promise<boolean> => {
-    try {
-      const response = await axios.post(`${BACKEND_API_URL}/dispense`, { token });
-      
-      if (response.data && response.data.status) {
-        toast.success('Prescription dispensed via backend API');
-        return true;
-      }
-      
-      toast.error('Failed to dispense prescription via backend');
-      return false;
-    } catch (error) {
-      console.error('Error dispensing via backend API:', error);
-      toast.error('Failed to dispense via backend', {
-        description: error instanceof Error ? error.message : 'Unknown error'
+      toast.error('Failed to dispense prescription', {
+        description: error instanceof Error ? error.message : 'Unknown error',
       });
       return false;
     }
@@ -333,8 +291,8 @@ export const Web3Service = {
   getPrescription: async (token: string): Promise<any> => {
     try {
       if (!web3State.contract || !web3State.isConnected) {
-        // Try using backend API if direct blockchain connection fails
-        return await Web3Service.getPrescriptionViaBackend(token);
+        toast.error('Wallet not connected');
+        return null;
       }
 
       const data = await web3State.contract.get_prescription(token);
@@ -352,43 +310,10 @@ export const Web3Service = {
       };
     } catch (error) {
       console.error('Error getting prescription from blockchain:', error);
-      
-      // Try using backend as fallback
-      try {
-        return await Web3Service.getPrescriptionViaBackend(token);
-      } catch (backendError) {
-        console.error('Backend fallback also failed:', backendError);
-        toast.error('Failed to retrieve prescription data', {
-          description: error instanceof Error ? error.message : 'Unknown error',
-        });
-        return null;
-      }
-    }
-  },
-
-  // Get prescription via backend API
-  getPrescriptionViaBackend: async (token: string): Promise<any> => {
-    try {
-      const response = await axios.get(`${BACKEND_API_URL}/prescriptions/${token}`);
-      
-      if (response.data) {
-        // Format the data to match the structure from the blockchain
-        return {
-          doctor: response.data[0],
-          patient: response.data[1],
-          disease: response.data[2],
-          drug: response.data[3],
-          quantity: Number(response.data[4]),
-          interval: Number(response.data[5]),
-          lastDispensed: new Date(Number(response.data[6]) * 1000),
-          remaining: Number(response.data[7]),
-        };
-      }
-      
-      throw new Error('Backend API returned invalid data');
-    } catch (error) {
-      console.error('Error getting prescription via backend API:', error);
-      throw error;
+      toast.error('Failed to retrieve prescription data', {
+        description: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return null;
     }
   }
 };
