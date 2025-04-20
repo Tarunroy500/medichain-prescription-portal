@@ -185,6 +185,9 @@ export const PrescriptionService = {
     // Generate a random blockchain-compatible token (bytes32)
     const blockchainToken = Web3Service.generateTokenForContract();
     
+    // Store the mapping between UI token and blockchain token
+    Web3Service.storeTokenMapping(uiToken, blockchainToken);
+    
     // Get connected wallet state
     const web3State = Web3Service.getState();
     let blockchainTxHash: string | null = null;
@@ -200,7 +203,7 @@ export const PrescriptionService = {
     };
 
     // If wallet is connected, try to send to blockchain
-    if (web3State.isConnected && web3State.address) {
+    if (web3State.isConnected || true) { // Always try to use either direct connection or backend API
       try {
         // We'll use the first medicine as the primary one for the blockchain
         // (The contract's data model is simpler than our UI model)
@@ -214,7 +217,7 @@ export const PrescriptionService = {
         // Convert our dose interval to seconds for the smart contract
         const intervalSeconds = doseIntervalToSeconds(prescriptionData.doseInterval);
         
-        // Send to blockchain
+        // Send to blockchain (will try direct connection or backend API)
         blockchainTxHash = await Web3Service.createPrescription(
           blockchainToken,
           patientAddress,
@@ -226,7 +229,7 @@ export const PrescriptionService = {
         
         if (blockchainTxHash) {
           newPrescription.blockchainTxHash = blockchainTxHash;
-          newPrescription.ethereumAddress = web3State.address;
+          newPrescription.ethereumAddress = web3State.address || undefined;
         }
       } catch (error) {
         console.error("Blockchain error:", error);
@@ -271,11 +274,11 @@ export const PrescriptionService = {
 
     // Try to update on blockchain if connected
     const web3State = Web3Service.getState();
-    if (web3State.isConnected && prescription.blockchainTxHash) {
+    if ((web3State.isConnected || true) && prescription.blockchainTxHash) {
       try {
-        // Note: In a real app, you would need to map between your UI tokens and the blockchain tokens
-        // For demo purposes, we'll assume the token is already in the right format
-        const blockchainToken = Web3Service.generateTokenForContract(); // This would actually be stored/retrieved
+        // Get the blockchain token from the UI token
+        const blockchainToken = Web3Service.getBlockchainToken(tokenId) || 
+                              Web3Service.generateTokenForContract(); // Fallback if mapping not found
         
         const success = await Web3Service.dispensePrescription(blockchainToken);
         if (!success) {
