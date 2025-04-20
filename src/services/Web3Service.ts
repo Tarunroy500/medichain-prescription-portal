@@ -9,7 +9,7 @@ declare global {
   }
 }
 
-const CONTRACT_ADDRESS = '0x30d1444a32a7fd98a8af1de9da49142ce508f4aa';
+const CONTRACT_ADDRESS = '0x30d1444a32a7fd98a8af1de9da49142ce508f4aab46c8e6774c03d17144ada5f';
 
 interface Web3State {
   provider: ethers.BrowserProvider | null;
@@ -178,18 +178,8 @@ export const Web3Service = {
         return null;
       }
 
-      // Log the parameters for debugging
-      console.log('Creating prescription with params:', {
-        token,
-        patientAddress,
-        disease,
-        drug,
-        quantity,
-        intervalSec
-      });
-
-      // Estimate gas for the transaction to ensure it has enough gas
-      const gasEstimate = await web3State.contract.create_prescription.estimateGas(
+      // Call the smart contract function
+      const tx = await web3State.contract.create_prescription(
         token,
         patientAddress,
         disease,
@@ -198,30 +188,8 @@ export const Web3Service = {
         ethers.toBigInt(intervalSec)
       );
 
-      console.log('Gas estimate:', gasEstimate.toString());
-
-      // Call the smart contract function with gas limit
-      const tx = await web3State.contract.create_prescription(
-        token,
-        patientAddress,
-        disease,
-        drug,
-        ethers.toBigInt(quantity),
-        ethers.toBigInt(intervalSec),
-        {
-          gasLimit: gasEstimate * ethers.toBigInt(120) / ethers.toBigInt(100), // Add 20% buffer to gas estimate
-        }
-      );
-
-      console.log('Transaction sent:', tx.hash);
-      toast.info('Prescription transaction submitted', {
-        description: 'Waiting for confirmation...',
-      });
-
       // Wait for transaction to be mined
       const receipt = await tx.wait();
-      console.log('Transaction receipt:', receipt);
-      
       toast.success('Prescription created on blockchain', {
         description: `Transaction: ${receipt.hash.slice(0, 6)}...${receipt.hash.slice(-4)}`,
       });
@@ -229,26 +197,8 @@ export const Web3Service = {
       return receipt.hash;
     } catch (error) {
       console.error('Error creating prescription on blockchain:', error);
-      
-      // More detailed error information
-      let errorMessage = 'Unknown error';
-      if (error instanceof Error) {
-        errorMessage = error.message;
-        console.error('Error details:', error);
-        
-        // Check for specific error types
-        if (errorMessage.includes('user rejected')) {
-          toast.error('Transaction rejected by user');
-          return null;
-        }
-        if (errorMessage.includes('insufficient funds')) {
-          toast.error('Insufficient funds for transaction');
-          return null;
-        }
-      }
-      
       toast.error('Failed to create prescription on blockchain', {
-        description: errorMessage
+        description: error instanceof Error ? error.message : 'Unknown error',
       });
       return null;
     }
