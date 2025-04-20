@@ -1,0 +1,44 @@
+/* Global styles for mobile optimization */
+
+/* Prevent pull-to-refresh on mobile */
+html, body {
+  overscroll-behavior-y: contain;
+}
+
+/* Optimize QR scanner for mobile */
+.qr-reader-container {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.qr-reader-container video {
+  width: 100% !important;
+  height: auto !important;
+  border-radius: 8px;
+}
+
+/* Improved mobile interaction */
+@media (max-width: 640px) {
+  .medichain-card {
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  button, .button {
+    touch-action: manipulation;
+  }
+  
+  input, select, textarea {
+    font-size: 16px !important; /* Prevents iOS zoom on input */
+  }
+}
+
+/* Helper for QR code display */
+.qr-code-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  background-color: white;
+}

@@ -1,142 +1,130 @@
-
 import { useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { QrCode, FileText, ArrowRight, History } from 'lucide-react';
+import { PrescriptionService } from '@/services/PrescriptionService';
 import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
-import { QrCode, Search } from 'lucide-react';
-import { toast } from 'sonner';
 import PrescriptionVerification from './PrescriptionVerification';
 
 const PharmacistDashboard = () => {
   const { user } = useAuth();
-  const [token, setToken] = useState('');
-  const [isScanning, setIsScanning] = useState(false);
-  const [verifying, setVerifying] = useState(false);
-  const [verifiedToken, setVerifiedToken] = useState<string | null>(null);
-
+  const [tokenInput, setTokenInput] = useState('');
+  const [activeTab, setActiveTab] = useState<string>('verify');
+  const [verificationMode, setVerificationMode] = useState<'input' | 'verify'>('input');
+  const [currentToken, setCurrentToken] = useState<string | undefined>(undefined);
+  
   const handleTokenSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!token) {
-      toast.error('Please enter a prescription token');
-      return;
+    if (tokenInput.trim()) {
+      setCurrentToken(tokenInput.trim());
+      setVerificationMode('verify');
     }
-
-    setVerifying(true);
-    // Simulate verification delay
-    setTimeout(() => {
-      setVerifiedToken(token);
-      setVerifying(false);
-    }, 1000);
   };
-
-  const simulateScan = () => {
-    setIsScanning(true);
-    // Simulate scanning delay
-    setTimeout(() => {
-      const mockToken = 'RX-ABC12345'; // For demo purposes
-      setToken(mockToken);
-      setIsScanning(false);
-      toast.success('QR code scanned successfully', {
-        description: `Prescription token: ${mockToken}`,
-      });
-    }, 2000);
-  };
-
-  const resetVerification = () => {
-    setToken('');
-    setVerifiedToken(null);
+  
+  const handleReset = () => {
+    setVerificationMode('input');
+    setTokenInput('');
+    setCurrentToken(undefined);
   };
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Pharmacist Dashboard</h2>
-        <p className="text-medineutral-600">Welcome back, {user?.name}</p>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold tracking-tight">Pharmacist Dashboard</h1>
+        <div className="text-sm text-medineutral-600">
+          Welcome, {user?.name || 'Pharmacist'}
+        </div>
       </div>
-
-      {!verifiedToken ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="medichain-card">
-            <CardHeader>
-              <CardTitle>Verify Prescription</CardTitle>
-              <CardDescription>Enter prescription token or scan QR code</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <form onSubmit={handleTokenSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="token">Prescription Token</Label>
-                  <div className="flex space-x-2">
-                    <Input 
-                      id="token" 
-                      placeholder="Enter token (e.g., RX-ABC12345)" 
-                      value={token}
-                      onChange={(e) => setToken(e.target.value)}
-                    />
-                    <Button type="submit" disabled={!token || verifying}>
-                      {verifying ? (
-                        <span className="inline-flex items-center">
-                          <span className="mr-2">Verifying</span>
-                          <span className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white"></span>
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center">
-                          <Search className="mr-2 h-4 w-4" /> 
-                          Verify
-                        </span>
-                      )}
-                    </Button>
+      
+      <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="verify" className="flex items-center gap-2">
+            <QrCode size={18} />
+            Verify Prescriptions
+          </TabsTrigger>
+          <TabsTrigger value="inventory" className="flex items-center gap-2">
+            <History size={18} />
+            Dispensing History
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="verify" className="space-y-4">
+          {verificationMode === 'input' ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <QrCode className="mr-2 h-5 w-5" />
+                  Prescription Verification
+                </CardTitle>
+                <CardDescription>
+                  Verify and dispense patient prescriptions by scanning a QR code or entering the prescription token
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-6">
+                  <div className="grid gap-3">
+                    <form onSubmit={handleTokenSubmit} className="flex w-full items-center space-x-2">
+                      <Input
+                        placeholder="Enter prescription token (e.g., RX-ABC12345)"
+                        value={tokenInput}
+                        onChange={(e) => setTokenInput(e.target.value)}
+                        className="font-mono"
+                      />
+                      <Button type="submit">
+                        <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </form>
                   </div>
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-medineutral-200" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-medineutral-50 px-2 text-medineutral-600">
+                        or scan a QR code
+                      </span>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => {
+                      setCurrentToken(undefined);
+                      setVerificationMode('verify');
+                    }}
+                  >
+                    <QrCode className="mr-2 h-4 w-4" /> Scan QR Code
+                  </Button>
                 </div>
-              </form>
-              
-              <Separator className="my-4" />
-              
-              <div className="text-center">
-                <p className="text-sm text-medineutral-600 mb-3">Or scan patient's QR code</p>
-                <Button 
-                  variant="outline" 
-                  className="w-full h-auto py-8 flex flex-col items-center justify-center border-dashed"
-                  onClick={simulateScan}
-                  disabled={isScanning}
-                >
-                  {isScanning ? (
-                    <>
-                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-mediblue-600 mb-2"></div>
-                      <p className="text-sm font-medium">Scanning...</p>
-                    </>
-                  ) : (
-                    <>
-                      <QrCode className="h-8 w-8 text-mediblue-600 mb-2" />
-                      <p className="text-sm font-medium">Scan QR Code</p>
-                    </>
-                  )}
-                </Button>
-                <p className="text-xs text-medineutral-500 mt-2">
-                  Position the QR code within the scanner area
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="medichain-card">
+              </CardContent>
+            </Card>
+          ) : (
+            <PrescriptionVerification 
+              token={currentToken} 
+              onReset={handleReset} 
+            />
+          )}
+        </TabsContent>
+        
+        <TabsContent value="inventory" className="space-y-4">
+          <Card>
             <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
-              <CardDescription>Your recent prescription verifications</CardDescription>
+              <CardTitle>Dispensing History</CardTitle>
+              <CardDescription>
+                View recent prescription dispensing history
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="text-center py-8 text-medineutral-500">
-                <p>No recent activity</p>
-                <p className="text-sm mt-2">Verified prescriptions will appear here</p>
+                <FileText className="mx-auto h-12 w-12 opacity-30" />
+                <p className="mt-2">Dispensing history will appear here</p>
               </div>
             </CardContent>
           </Card>
-        </div>
-      ) : (
-        <PrescriptionVerification token={verifiedToken} onReset={resetVerification} />
-      )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

@@ -1,6 +1,6 @@
-
-import React, { createContext, useState, useContext, ReactNode } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { toast } from 'sonner';
+import { Web3Service } from '@/services/Web3Service';
 
 // Define user roles
 export type UserRole = 'doctor' | 'patient' | 'pharmacist' | null;
@@ -11,6 +11,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  ethereumAddress?: string; // New field for wallet address
 }
 
 // Define auth context interface
@@ -22,6 +23,11 @@ interface AuthContextType {
   signup: (name: string, email: string, password: string, role: UserRole) => Promise<void>;
   logout: () => void;
   switchRole: (role: UserRole) => void;
+  // Wallet related functions
+  isWalletConnected: boolean;
+  walletAddress: string | null;
+  connectWallet: () => Promise<void>;
+  disconnectWallet: () => void;
 }
 
 // Mock users for demo
@@ -40,12 +46,35 @@ const AuthContext = createContext<AuthContextType>({
   signup: async () => {},
   logout: () => {},
   switchRole: () => {},
+  isWalletConnected: false,
+  walletAddress: null,
+  connectWallet: async () => {},
+  disconnectWallet: () => {},
 });
 
 // Auth provider component
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole>(null);
+  const [isWalletConnected, setIsWalletConnected] = useState<boolean>(false);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+
+  // Listen for wallet connection changes
+  useEffect(() => {
+    const unsubscribe = Web3Service.subscribe((state) => {
+      setIsWalletConnected(state.isConnected);
+      setWalletAddress(state.address);
+      
+      // If user is already logged in, update their Ethereum address
+      if (user && state.address) {
+        setUser(prev => prev ? {...prev, ethereumAddress: state.address} : null);
+      }
+    });
+    
+    return () => {
+      unsubscribe();
+    };
+  }, [user]);
 
   // Mock login function
   const login = async (email: string, password: string, selectedRole: UserRole): Promise<void> => {
@@ -55,7 +84,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const foundUser = mockUsers.find(u => u.email === email && u.role === selectedRole);
     
     if (foundUser) {
-      setUser(foundUser);
+      // Update with wallet address if already connected
+      const web3State = Web3Service.getState();
+      const userWithWallet = {
+        ...foundUser,
+        ethereumAddress: web3State.address || undefined
+      };
+      
+      setUser(userWithWallet);
       setRole(foundUser.role);
       toast.success(`Welcome back, ${foundUser.name}!`);
     } else {
@@ -75,11 +111,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       throw new Error('User already exists');
     }
 
+    // Get wallet address if connected
+    const web3State = Web3Service.getState();
+    
     const newUser: User = {
       id: `${mockUsers.length + 1}`,
       name,
       email,
       role: selectedRole,
+      ethereumAddress: web3State.address || undefined
     };
 
     // In a real app, we'd make an API call here
@@ -94,6 +134,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(null);
     setRole(null);
     toast.info('You have been logged out');
+    
+    // Optionally disconnect wallet on logout
+    // Web3Service.disconnectWallet();
   };
 
   // Switch role function (for demo purposes)
@@ -102,11 +145,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     const foundUser = mockUsers.find(u => u.role === newRole);
     if (foundUser) {
-      setUser(foundUser);
+      // Preserve wallet address when switching roles
+      const userWithWallet = {
+        ...foundUser,
+        ethereumAddress: walletAddress || undefined
+      };
+      
+      setUser(userWithWallet);
       setRole(newRole);
       toast.success(`Switched to ${newRole} role`);
     } else {
       toast.error(`No user found with ${newRole} role`);
+    }
+  };
+
+  // Connect wallet function
+  const connectWallet = async (): Promise<void> => {
+    const address = await Web3Service.connectWallet();
+    if (address && user) {
+      // Update user with wallet address
+      setUser(prev => prev ? {...prev, ethereumAddress: address} : null);
+    }
+  };
+
+  // Disconnect wallet function
+  const disconnectWallet = () => {
+    Web3Service.disconnectWallet();
+    
+    // Update user to remove wallet address
+    if (user) {
+      setUser(prev => {
+        if (!prev) return null;
+        const { ethereumAddress, ...rest } = prev;
+        return rest;
+      });
     }
   };
 
@@ -120,6 +192,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         signup,
         logout,
         switchRole,
+        isWalletConnected,
+        walletAddress,
+        connectWallet,
+        disconnectWallet,
       }}
     >
       {children}

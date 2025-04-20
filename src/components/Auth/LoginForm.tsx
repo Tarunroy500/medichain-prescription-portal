@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -11,12 +10,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAuth, UserRole } from '@/contexts/AuthContext';
 import { Lock } from 'lucide-react';
+import {DrData} from '../../data/DrData'
 
 // Define form schema
 const loginSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email address' }),
   password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
   role: z.enum(['doctor', 'patient', 'pharmacist']),
+  license: z.string().optional(),
 });
 
 const signupSchema = z.object({
@@ -36,6 +37,7 @@ type SignupFormValues = z.infer<typeof signupSchema>;
 const LoginForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [formType, setFormType] = useState<'login' | 'signup'>('login');
+  const [licenseError, setLicenseError] = useState<string | null>(null);
   const { login, signup } = useAuth();
 
   // Initialize login form
@@ -45,6 +47,7 @@ const LoginForm = () => {
       email: '',
       password: '',
       role: 'doctor',
+      license: '',
     },
   });
 
@@ -63,7 +66,21 @@ const LoginForm = () => {
   // Handle login submit
   const onLoginSubmit = async (data: LoginFormValues) => {
     setIsLoading(true);
+    setLicenseError(null); // Reset any previous errors
+    
     try {
+      console.log("drdata", DrData);
+      
+      // Check license for doctors against DrData
+      if (data.role === 'doctor' && data.license) {
+        const doctorExists = DrData.some(doctor => doctor.license === data.license);
+        if (!doctorExists) {
+          setLicenseError("Invalid doctor license. Please check and try again.");
+          setIsLoading(false);
+          return;
+        }
+      }
+      
       await login(data.email, data.password, data.role as UserRole);
     } catch (error) {
       console.error('Login failed:', error);
@@ -90,6 +107,18 @@ const LoginForm = () => {
       loginForm.setValue('email', `${role}@example.com`);
       loginForm.setValue('password', 'password123');
       loginForm.setValue('role', role);
+      
+      // Set a mock license for doctors
+      if (role === 'doctor') {
+        // Assuming DrData has at least one doctor with a license
+        if (DrData.length > 0) {
+          loginForm.setValue('license', DrData[0].license);
+        } else {
+          loginForm.setValue('license', 'DL18793');
+        }
+      } else {
+        loginForm.setValue('license', '');
+      }
     }
   };
 
@@ -115,6 +144,11 @@ const LoginForm = () => {
 
           <TabsContent value="login">
             <Form {...loginForm}>
+              {licenseError && (
+                <div className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                  <span className="block sm:inline">{licenseError}</span>
+                </div>
+              )}
               <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4 mt-4">
                 <FormField
                   control={loginForm.control}
@@ -161,6 +195,19 @@ const LoginForm = () => {
                       <FormLabel>Email</FormLabel>
                       <FormControl>
                         <Input placeholder="your@email.com" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={loginForm.control}
+                  name="license"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Dr Licence Number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="ex DL18793" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
@@ -17,6 +16,8 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 import { PrescriptionService, medicines, DoseInterval } from '@/services/PrescriptionService';
 import { toast } from 'sonner';
+import { AlertCircle, Wallet } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 // Define selected medicine type
 interface SelectedMedicine {
@@ -38,7 +39,7 @@ const prescriptionSchema = z.object({
 type PrescriptionFormValues = z.infer<typeof prescriptionSchema>;
 
 const PrescriptionForm = () => {
-  const { user } = useAuth();
+  const { user, isWalletConnected, connectWallet } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [selectedMedicines, setSelectedMedicines] = useState<SelectedMedicine[]>([]);
   const [medicineId, setMedicineId] = useState('');
@@ -47,6 +48,7 @@ const PrescriptionForm = () => {
   const [lockDates, setLockDates] = useState<Date[]>([]);
   const [prescriptionCreated, setPrescriptionCreated] = useState(false);
   const [prescriptionToken, setPrescriptionToken] = useState('');
+  const [blockchainTxHash, setBlockchainTxHash] = useState<string | null>(null);
 
   const form = useForm<PrescriptionFormValues>({
     resolver: zodResolver(prescriptionSchema),
@@ -157,6 +159,11 @@ const PrescriptionForm = () => {
       setPrescriptionToken(prescription.tokenId);
       setPrescriptionCreated(true);
       
+      // Store the blockchain transaction hash if available
+      if (prescription.blockchainTxHash) {
+        setBlockchainTxHash(prescription.blockchainTxHash);
+      }
+      
       toast.success(`Prescription created with token: ${prescription.tokenId}`);
 
     } catch (error) {
@@ -197,6 +204,32 @@ const PrescriptionForm = () => {
               <p className="text-sm text-medineutral-600 mb-2">Prescription Token</p>
               <p className="text-xl font-mono font-bold text-mediblue-700">{prescriptionToken}</p>
             </div>
+            
+            {blockchainTxHash ? (
+              <div className="p-4 bg-medimint-50 rounded-lg border border-medimint-200">
+                <p className="text-sm text-medimint-700 mb-2">Blockchain Transaction</p>
+                <p className="text-sm font-mono break-all">{blockchainTxHash}</p>
+              </div>
+            ) : (
+              <Alert variant="warning" className="bg-amber-50 border-amber-200 text-amber-800">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  This prescription was not recorded on the blockchain.
+                  {!isWalletConnected && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={connectWallet}
+                      className="ml-2 bg-amber-100"
+                    >
+                      <Wallet className="h-3 w-3 mr-1" />
+                      Connect Wallet
+                    </Button>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+            
             <div className="mt-6 flex justify-center">
               <Button onClick={handleReset} className="mr-4">
                 Create New Prescription
@@ -206,6 +239,25 @@ const PrescriptionForm = () => {
         ) : (
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              {!isWalletConnected && (
+                <Alert className="bg-mediblue-50 border-mediblue-200">
+                  <AlertCircle className="h-4 w-4 text-mediblue-600" />
+                  <AlertDescription className="flex items-center justify-between">
+                    <span>Connect your wallet to record prescriptions on the blockchain</span>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={connectWallet}
+                      className="bg-mediblue-100 text-mediblue-700 border-mediblue-300"
+                    >
+                      <Wallet className="h-3 w-3 mr-1" />
+                      Connect
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              {/* Existing form fields */}
               <div className="grid gap-6 sm:grid-cols-2">
                 <FormField
                   control={form.control}
@@ -475,7 +527,7 @@ const PrescriptionForm = () => {
                   Reset
                 </Button>
                 <Button type="submit" disabled={isLoading}>
-                  Generate Prescription
+                  {isLoading ? 'Generating...' : 'Generate Prescription'}
                 </Button>
               </div>
             </form>

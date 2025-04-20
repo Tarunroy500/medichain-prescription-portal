@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +23,7 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/contexts/AuthContext';
 import { Prescription, PrescriptionService } from '@/services/PrescriptionService';
 import { toast } from 'sonner';
+import QRCode from 'react-qr-code';
 
 const PrescriptionCards = () => {
   const { user } = useAuth();
@@ -77,6 +77,55 @@ const PrescriptionCards = () => {
       description: 'Your pharmacist can now scan your device',
     });
   };
+
+  const renderQrCodeDialog = () => (
+    <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Prescription QR Code</DialogTitle>
+        </DialogHeader>
+        {selectedPrescription && (
+          <div className="space-y-4">
+            <div className="flex justify-center">
+              <div className="bg-white p-4 rounded-md shadow-md">
+                {/* Real QR Code with better mobile support */}
+                <div className="qr-code-container bg-white p-2" style={{ maxWidth: '100%' }}>
+                  <QRCode
+                    value={selectedPrescription.tokenId}
+                    size={200}
+                    level="H"
+                    fgColor="#000"
+                    bgColor="#fff"
+                    style={{ maxWidth: "100%", height: "auto" }}
+                    viewBox={`0 0 256 256`}
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div className="px-2">
+              <div className="text-center font-mono font-bold text-xl mb-2">
+                {selectedPrescription.tokenId}
+              </div>
+              <p className="text-sm text-center text-medineutral-600">
+                Show this QR code to your pharmacist to retrieve your medication
+              </p>
+            </div>
+            
+            <Alert>
+              <AlertTitle className="flex items-center">
+                <Bell className="h-4 w-4 mr-2" />
+                Important Information
+              </AlertTitle>
+              <AlertDescription>
+                This prescription is valid until {format(new Date(selectedPrescription.doseValidity), 'MMMM d, yyyy')}
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
 
   if (loading) {
     return (
@@ -255,47 +304,8 @@ const PrescriptionCards = () => {
         ))}
       </Tabs>
       
-      {/* QR Code Dialog */}
-      <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Prescription QR Code</DialogTitle>
-          </DialogHeader>
-          {selectedPrescription && (
-            <div className="space-y-4">
-              <div className="flex justify-center">
-                <div className="bg-white p-4 rounded-md shadow-md">
-                  {/* Simple QR Code mockup */}
-                  <div className="w-48 h-48 bg-[repeating-linear-gradient(45deg,#f0f0f0,#f0f0f0_10px,#e0e0e0_10px,#e0e0e0_20px)]">
-                    <div className="w-full h-full flex items-center justify-center">
-                      <QrCode size={120} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="px-2">
-                <div className="text-center font-mono font-bold text-xl mb-2">
-                  {selectedPrescription.tokenId}
-                </div>
-                <p className="text-sm text-center text-medineutral-600">
-                  Show this QR code to your pharmacist to retrieve your medication
-                </p>
-              </div>
-              
-              <Alert>
-                <AlertTitle className="flex items-center">
-                  <Bell className="h-4 w-4 mr-2" />
-                  Important Information
-                </AlertTitle>
-                <AlertDescription>
-                  This prescription is valid until {format(new Date(selectedPrescription.doseValidity), 'MMMM d, yyyy')}
-                </AlertDescription>
-              </Alert>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Use the updated QR code dialog */}
+      {renderQrCodeDialog()}
     </div>
   );
 };

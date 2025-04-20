@@ -1,5 +1,5 @@
-
 import { toast } from 'sonner';
+import { Web3Service } from './Web3Service';
 
 // Define medicine interface
 export interface Medicine {
@@ -37,6 +37,9 @@ export interface Prescription {
   status: PrescriptionStatus;
   nextValidDose: Date | null;
   dispensedDates: Date[];
+  // New blockchain-related fields
+  blockchainTxHash?: string;
+  ethereumAddress?: string;
 }
 
 // Mock medicines data
@@ -51,8 +54,9 @@ export const medicines: Medicine[] = [
   { id: '8', name: 'Gabapentin 300mg', available: false, quantity: 0 },
 ];
 
-// Generate prescription token
+// Generate prescription token - enhanced with blockchain compatibility
 export function generatePrescriptionToken(): string {
+  // For UI display, we'll continue to use human-readable tokens
   const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   let result = 'RX-';
   for (let i = 0; i < 8; i++) {
@@ -129,6 +133,21 @@ let mockPrescriptions: Prescription[] = [
   }
 ];
 
+// Helper to convert dose interval to seconds for smart contract
+const doseIntervalToSeconds = (interval: DoseInterval): number => {
+  switch (interval) {
+    case 'daily':
+      return 24 * 60 * 60;
+    case 'weekly':
+      return 7 * 24 * 60 * 60;
+    case 'monthly':
+      return 30 * 24 * 60 * 60;
+    case 'one-time':
+    default:
+      return 0; // One-time prescriptions don't have an interval
+  }
+};
+
 // PrescriptionService for handling prescriptions
 export const PrescriptionService = {
   // Get all prescriptions
@@ -152,28 +171,82 @@ export const PrescriptionService = {
 
   // Get prescription by token
   getPrescriptionByToken: (token: string): Promise<Prescription | null> => {
-    const prescription = mockPrescriptions.find(p => p.tokenId === token);
+    // Clean the token in case it comes from a QR code with whitespace
+    const cleanToken = token.trim();
+    const prescription = mockPrescriptions.find(p => p.tokenId === cleanToken);
     return Promise.resolve(prescription || null);
   },
 
-  // Create new prescription
-  createPrescription: (prescriptionData: Omit<Prescription, 'id' | 'tokenId' | 'status' | 'nextValidDose' | 'dispensedDates'>): Promise<Prescription> => {
+  // Create new prescription with blockchain integration
+  createPrescription: async (prescriptionData: Omit<Prescription, 'id' | 'tokenId' | 'status' | 'nextValidDose' | 'dispensedDates'>): Promise<Prescription> => {
+    // Generate a random token for UI
+    const uiToken = generatePrescriptionToken();
+    
+    // Generate a random blockchain-compatible token (bytes32)
+    const blockchainToken = Web3Service.generateTokenForContract();
+    
+    // Get connected wallet state
+    const web3State = Web3Service.getState();
+    let blockchainTxHash: string | null = null;
+    
+    // Create the prescription object
     const newPrescription: Prescription = {
       ...prescriptionData,
       id: String(mockPrescriptions.length + 1),
-      tokenId: generatePrescriptionToken(),
+      tokenId: uiToken,
       status: 'active',
       nextValidDose: new Date(),
       dispensedDates: [],
     };
+
+    // If wallet is connected, try to send to blockchain
+    if (web3State.isConnected && web3State.address) {
+      try {
+        // We'll use the first medicine as the primary one for the blockchain
+        // (The contract's data model is simpler than our UI model)
+        const primaryMedicine = prescriptionData.medicines[0];
+        
+        // Patient address - in a real app, we would have a mapping of patient IDs to wallet addresses
+        // For now, let's use a dummy patient address for demo purposes
+        // In production, this would come from the patient's actual Ethereum address
+        const patientAddress = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"; // Replace with actual patient address
+        
+        // Convert our dose interval to seconds for the smart contract
+        const intervalSeconds = doseIntervalToSeconds(prescriptionData.doseInterval);
+        
+        // Send to blockchain
+        blockchainTxHash = await Web3Service.createPrescription(
+          blockchainToken,
+          patientAddress,
+          prescriptionData.disease,
+          primaryMedicine.medicine.name,
+          primaryMedicine.quantity,
+          intervalSeconds
+        );
+        
+        if (blockchainTxHash) {
+          newPrescription.blockchainTxHash = blockchainTxHash;
+          newPrescription.ethereumAddress = web3State.address;
+        }
+      } catch (error) {
+        console.error("Blockchain error:", error);
+        toast.error("Failed to record prescription on blockchain", {
+          description: "The prescription was created locally only."
+        });
+      }
+    } else {
+      toast.warning("Wallet not connected", {
+        description: "Prescription created locally only. Connect wallet to record on blockchain."
+      });
+    }
 
     mockPrescriptions = [...mockPrescriptions, newPrescription];
     toast.success('Prescription created successfully');
     return Promise.resolve(newPrescription);
   },
 
-  // Dispense prescription
-  dispensePrescription: (tokenId: string): Promise<Prescription> => {
+  // Dispense prescription with blockchain integration
+  dispensePrescription: async (tokenId: string): Promise<Prescription> => {
     const index = mockPrescriptions.findIndex(p => p.tokenId === tokenId);
     
     if (index === -1) {
@@ -194,6 +267,28 @@ export const PrescriptionService = {
     if (prescription.lockDates.some(date => date.getTime() > now.getTime())) {
       toast.error('This prescription is currently locked');
       return Promise.reject(new Error('Prescription locked'));
+    }
+
+    // Try to update on blockchain if connected
+    const web3State = Web3Service.getState();
+    if (web3State.isConnected && prescription.blockchainTxHash) {
+      try {
+        // Note: In a real app, you would need to map between your UI tokens and the blockchain tokens
+        // For demo purposes, we'll assume the token is already in the right format
+        const blockchainToken = Web3Service.generateTokenForContract(); // This would actually be stored/retrieved
+        
+        const success = await Web3Service.dispensePrescription(blockchainToken);
+        if (!success) {
+          toast.error('Blockchain verification failed');
+          return Promise.reject(new Error('Blockchain verification failed'));
+        }
+      } catch (error) {
+        console.error("Blockchain error during dispensing:", error);
+        toast.error("Failed to update blockchain record", {
+          description: "Please try again or contact support."
+        });
+        return Promise.reject(new Error('Blockchain update failed'));
+      }
     }
 
     // Update prescription
@@ -230,7 +325,8 @@ export const PrescriptionService = {
 
   // Check if prescription token is valid
   verifyPrescriptionToken: (token: string): Promise<boolean> => {
-    const prescription = mockPrescriptions.find(p => p.tokenId === token);
+    const cleanToken = token.trim();
+    const prescription = mockPrescriptions.find(p => p.tokenId === cleanToken);
     return Promise.resolve(!!prescription && prescription.status === 'active');
   }
 };

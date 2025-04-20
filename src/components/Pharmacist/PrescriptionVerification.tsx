@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,53 +15,60 @@ import {
   Calendar,
   DatabaseBackup,
   Lock,
-  Unlock
+  Unlock,
+  QrCode
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Prescription, PrescriptionService } from '@/services/PrescriptionService';
 import { toast } from 'sonner';
+import QRCodeScanner from './QRCodeScanner';
 
 interface PrescriptionVerificationProps {
-  token: string;
+  token?: string;
   onReset: () => void;
 }
 
 const PrescriptionVerification = ({ token, onReset }: PrescriptionVerificationProps) => {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [dispensing, setDispensing] = useState(false);
   const [prescription, setPrescription] = useState<Prescription | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dispensed, setDispensed] = useState(false);
+  const [currentToken, setCurrentToken] = useState<string | undefined>(token);
+  const [scanMode, setScanMode] = useState<boolean>(!token);
+
+  const verifyPrescription = async (tokenToVerify: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await PrescriptionService.getPrescriptionByToken(tokenToVerify);
+      if (data) {
+        setPrescription(data);
+      } else {
+        setError('Prescription not found');
+      }
+    } catch (err) {
+      setError('Failed to verify prescription');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const verifyPrescription = async () => {
-      setLoading(true);
-      try {
-        const data = await PrescriptionService.getPrescriptionByToken(token);
-        if (data) {
-          setPrescription(data);
-        } else {
-          setError('Prescription not found');
-        }
-      } catch (err) {
-        setError('Failed to verify prescription');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    verifyPrescription();
-  }, [token]);
+    if (currentToken) {
+      verifyPrescription(currentToken);
+    }
+  }, [currentToken]);
 
   const handleDispense = async () => {
     if (!prescription) return;
     
     setDispensing(true);
     try {
-      await PrescriptionService.dispensePrescription(token);
+      await PrescriptionService.dispensePrescription(currentToken!);
       // Update prescription data
-      const updatedPrescription = await PrescriptionService.getPrescriptionByToken(token);
+      const updatedPrescription = await PrescriptionService.getPrescriptionByToken(currentToken!);
       setPrescription(updatedPrescription);
       setDispensed(true);
       toast.success('Prescription dispensed successfully', {
@@ -75,6 +81,11 @@ const PrescriptionVerification = ({ token, onReset }: PrescriptionVerificationPr
     } finally {
       setDispensing(false);
     }
+  };
+
+  const handleTokenDetected = (newToken: string) => {
+    setCurrentToken(newToken);
+    setScanMode(false);
   };
 
   // Check if prescription is locked today
@@ -102,6 +113,10 @@ const PrescriptionVerification = ({ token, onReset }: PrescriptionVerificationPr
     
     return true;
   };
+
+  if (scanMode) {
+    return <QRCodeScanner onTokenDetected={handleTokenDetected} />;
+  }
 
   if (loading) {
     return (
@@ -140,6 +155,10 @@ const PrescriptionVerification = ({ token, onReset }: PrescriptionVerificationPr
             </AlertDescription>
           </Alert>
           <div className="flex justify-end">
+            <Button onClick={() => setScanMode(true)} variant="outline" className="mr-2">
+              <QrCode className="mr-2 h-4 w-4" />
+              Scan QR Code
+            </Button>
             <Button onClick={onReset} variant="secondary">Try Again</Button>
           </div>
         </CardContent>
@@ -327,9 +346,15 @@ const PrescriptionVerification = ({ token, onReset }: PrescriptionVerificationPr
       </CardContent>
       
       <CardFooter className="flex justify-between">
-        <Button variant="outline" onClick={onReset}>
-          Back
-        </Button>
+        <div>
+          <Button variant="outline" onClick={onReset} className="mr-2">
+            Back
+          </Button>
+          <Button variant="secondary" onClick={() => setScanMode(true)}>
+            <QrCode className="mr-2 h-4 w-4" />
+            Scan QR
+          </Button>
+        </div>
         
         {!dispensed && (
           <Button 

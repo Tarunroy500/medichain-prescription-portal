@@ -1,9 +1,8 @@
-
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth, UserRole } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { User, FileText, Pill } from 'lucide-react';
+import { User, FileText, Pill, Wallet } from 'lucide-react';
 import LoginForm from '@/components/Auth/LoginForm';
 import DoctorDashboard from '@/components/Doctor/DoctorDashboard';
 import PatientDashboard from '@/components/Patient/PatientDashboard';
@@ -15,7 +14,34 @@ interface MainLayoutProps {
 }
 
 const MainLayout: React.FC<MainLayoutProps> = () => {
-  const { isAuthenticated, role, logout, switchRole } = useAuth();
+  const { 
+    isAuthenticated, 
+    role, 
+    logout, 
+    switchRole, 
+    isWalletConnected, 
+    walletAddress,
+    connectWallet,
+    disconnectWallet
+  } = useAuth();
+
+  // Ensure proper viewport metadata for mobile responsiveness
+  useEffect(() => {
+    // Check if viewport meta tag exists
+    let viewportMeta = document.querySelector('meta[name="viewport"]');
+    
+    // If it doesn't exist, create it
+    if (!viewportMeta) {
+      viewportMeta = document.createElement('meta');
+      viewportMeta.setAttribute('name', 'viewport');
+      document.head.appendChild(viewportMeta);
+    }
+    
+    // Set the proper viewport properties for responsive design
+    viewportMeta.setAttribute('content', 
+      'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'
+    );
+  }, []);
 
   const handleRoleSwitch = (newRole: UserRole) => {
     if (!newRole) return;
@@ -24,6 +50,11 @@ const MainLayout: React.FC<MainLayoutProps> = () => {
       switchRole(newRole);
       toast.info(`Switched to ${newRole} dashboard`);
     }
+  };
+
+  // Format wallet address for display
+  const formatAddress = (address: string) => {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
   return (
@@ -39,9 +70,35 @@ const MainLayout: React.FC<MainLayoutProps> = () => {
             </div>
             <h1 className="font-semibold text-xl text-mediblue-800">MediChain</h1>
           </div>
-          {isAuthenticated && (
-            <Button variant="outline" onClick={logout}>Log out</Button>
-          )}
+          
+          <div className="flex items-center space-x-2">
+            {/* Wallet Connection Button */}
+            {isWalletConnected ? (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={disconnectWallet}
+                className="bg-mediblue-50 text-mediblue-700 border-mediblue-200 hover:bg-mediblue-100"
+              >
+                <Wallet className="h-4 w-4 mr-2" />
+                {formatAddress(walletAddress!)}
+              </Button>
+            ) : (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={connectWallet}
+                className="mr-2"
+              >
+                <Wallet className="h-4 w-4 mr-2" />
+                Connect Wallet
+              </Button>
+            )}
+            
+            {isAuthenticated && (
+              <Button variant="outline" onClick={logout}>Log out</Button>
+            )}
+          </div>
         </div>
       </header>
 

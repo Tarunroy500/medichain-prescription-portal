@@ -1,0 +1,33 @@
+[
+    {
+      "inputs":[
+        {"internalType":"bytes32","name":"token","type":"bytes32"},
+        {"internalType":"address","name":"patient","type":"address"},
+        {"internalType":"string","name":"disease","type":"string"},
+        {"internalType":"string","name":"drug","type":"string"},
+        {"internalType":"uint256","name":"quantity","type":"uint256"},
+        {"internalType":"uint256","name":"interval","type":"uint256"}
+      ],
+      "name":"create_prescription","outputs":[],"stateMutability":"nonpayable","type":"function"
+    },
+    {
+      "inputs":[{"internalType":"bytes32","name":"token","type":"bytes32"}],
+      "name":"dispense","outputs":[{"internalType":"bool","name":"","type":"bool"}],
+      "stateMutability":"nonpayable","type":"function"
+    },
+    {
+      "inputs":[{"internalType":"bytes32","name":"token","type":"bytes32"}],
+      "name":"get_prescription","outputs":[
+        {"internalType":"address","name":"","type":"address"},
+        {"internalType":"address","name":"","type":"address"},
+        {"internalType":"string","name":"","type":"string"},
+        {"internalType":"string","name":"","type":"string"},
+        {"internalType":"uint256","name":"","type":"uint256"},
+        {"internalType":"uint256","name":"","type":"uint256"},
+        {"internalType":"uint256","name":"","type":"uint256"},
+        {"internalType":"uint256","name":"","type":"uint256"}
+      ],"stateMutability":"view","type":"function"
+    }
+  ]
+   
+  
